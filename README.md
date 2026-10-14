@@ -1,55 +1,67 @@
 # War Card Game Simulator
 
-A Python implementation of the classic card game War, played between a simulated player and computer. Includes a full object-oriented card/deck/pile model with overloaded comparison operators, so cards can be compared directly with `<`, `>`, and `==` just like numbers.
+![tests](https://github.com/singhg349-wq/war-card-game-simulator/actions/workflows/tests.yml/badge.svg)
 
-## What it does
+The classic card game War in object-oriented Python, played between a player and the computer. Cards, decks and piles are modelled as classes, and `Card` overloads the comparison operators, so cards can be compared and sorted with `<`, `>` and `==` like numbers.
 
-A standard 52-card deck is shuffled and split evenly between the player and computer. Each round, both sides play their top card — whoever plays the higher-ranked card wins both cards and adds them to their win pile. A tie triggers "war": both sides burn three cards into the pot and play one more card face-off, with the winner taking the entire pot (including the burned cards). Ties during a war escalate recursively, growing the pot until someone wins it. The game ends after a fixed number of rounds or when either side runs out of cards to draw, and the winner is whoever accumulated more cards.
+## How the game works
 
-## Features
+A shuffled 52-card deck is split evenly between the player and the computer. Each round, both sides play their top card, and the higher **rank** takes both cards into its win pile. If the ranks match, it's **war**: each side burns three cards face down and plays a fourth, and the higher rank takes the whole pot. A tie during a war starts another war on top of the same pot, so the pot keeps growing until someone wins it.
 
-- Full `Card` class with rank/suit comparison logic (`2`–`10`, `J`, `Q`, `K`, `A`, across `C`/`D`/`H`/`S`), including tie-breaking by suit
-- `Deck` class that builds and shuffles a complete 52-card deck
-- `Pile` class shared by both draw piles and win piles, supporting drawing, adding cards, finding the highest card, and finding the most common suit
-- Recursive "war" resolution that correctly escalates through repeated ties
-- End-of-game summary: winner, each side's win pile size, the player's highest card won, and their most common suit won
+If one side doesn't have enough cards left for a war, it forfeits the pot to the other side. If neither side does, each gets back the cards it put in. No card is ever lost: the tests check that all 52 cards are accounted for at the end of every game.
+
+The game ends after a set number of rounds (26 by default) or when a draw pile runs out. Whoever has won more cards wins.
 
 ## Running
 
-```
-python3 game_of_cards.py
+```bash
+python3 game_of_cards.py              # random game
+python3 game_of_cards.py --seed 3     # the same game every time
+python3 game_of_cards.py --rounds 100
 ```
 
-Runs a full 26-round game automatically and prints each round as it's played — no arguments needed.
+Only the standard library is needed (Python 3.8+).
 
 ## Example output
 
-During play, each round prints as it's resolved:
 ```
-Player plays Card(rank='2',suit='S'), Computer plays Card(rank='T',suit='S')
-Player plays Card(rank='5',suit='D'), Computer plays Card(rank='7',suit='S')
+$ python3 game_of_cards.py --seed 3
+Player plays 5 of Diamonds, Computer plays Queen of Diamonds
+Player plays 9 of Clubs, Computer plays 8 of Spades
+...
+Player plays Jack of Clubs, Computer plays Jack of Spades
+  Same rank: WAR!
+  War face-off: Player 4 of Spades, Computer 6 of Clubs (pot: 10 cards)
+  Computer wins the war and takes 10 cards
 ...
 Computer wins!
-```
-
-End-of-game summary:
-```
 Game Over! Winner: Computer
-Peace offerings - Player: 0, Computer: 0
-Player's highest card: Card(rank='A',suit='S')
-Player's most common suit: None
-Player's win pile: Card(rank='5',suit='S'),Card(rank='5',suit='H'),...
+Cards won - Player: 22, Computer: 30
+Wars won - Player: 0, Computer: 1
+Player's highest card: Ace of Spades
+Player's most common suit: Clubs
+Player's win pile: 9 of Clubs, 8 of Spades, 9 of Diamonds, ...
 ```
 
 ## Design notes
 
-- **Operator overloading for game logic**: `Card` implements `__lt__`, `__le__`, `__gt__`, `__ge__`, `__eq__`, and `__ne__`, comparing by rank first and suit as a tiebreaker. This means `Pile.find_highest()` and the round-comparison logic in `Game` never need special-case comparison code — they just use plain `>`/`<` and let the `Card` class define what "higher" means.
+- **Operator overloading with a full ordering:** `Card` implements `__lt__`, `__le__`, `__gt__`, `__ge__`, `__eq__`, `__ne__` and `__hash__`, comparing by rank first and suit as a tiebreaker (Clubs < Diamonds < Hearts < Spades). That gives every card a unique position, so `max()` and `sorted()` work directly on piles. Rounds, though, are decided by `Card.value()`, which is rank only, because in War two cards of the same rank are a tie.
+- **Recursive war resolution:** `go_to_war` calls itself when the face-off ties again, passing the same growing `pot` list. A chain of ties builds one larger pot with no separate bookkeeping.
+- **Fair pot handling:** cards go into the pot in player, computer, player, computer order. If neither side can afford a war, `pot[0::2]` and `pot[1::2]` hand each side back exactly the cards it put in.
+- **Repeatable games:** the shuffle uses `random.Random(seed)`, so `--seed` reproduces a game exactly. The tests rely on this.
+- **Most common suit:** ties go to the higher suit, so a non-empty pile always reports a suit.
 
-- **Recursive war resolution**: rather than using a loop with manually tracked state, `go_to_war` calls itself again when the face-off is also a tie, passing along the same growing `pot` list. Each recursive call adds three more burned cards plus a new face-off pair, so a chain of consecutive ties naturally builds one larger pot instead of needing separate bookkeeping for "how many times have we gone to war."
+## Tests
 
-- **War requires at least 4 cards**: before burning cards, `go_to_war` checks that both draw piles have at least 4 cards left. If a side doesn't, the function returns without resolving that round — a documented edge case rather than a crash, though it does mean the pot from an unresolved war isn't added to either win pile, so those specific cards don't end up counted in the final result.
+```bash
+python3 -m unittest -v
+```
 
-- **`peace_offerings` is tracked but not yet used**: the `Game` class keeps a `peace_offerings` counter for each side and prints it in the summary, but no code currently increments it — it's a hook for a rule that isn't implemented in this version, which is why it always prints `0` for both sides.
+`test_game.py` checks card comparisons, that matching ranks start a war, that all 52 cards survive thousands of seeded games, and the pile helpers. The tests run automatically on every push through GitHub Actions.
+
+## License
+
+MIT
 
 ## Author
 
